@@ -4,8 +4,11 @@ import com.dezzy.springsecurity.filter.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -16,6 +19,10 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+import static com.dezzy.springsecurity.data.entity.Role.ADMIN;
+import static com.dezzy.springsecurity.data.entity.Role.MANAGER;
+import static com.dezzy.springsecurity.data.entity.base.Permissions.*;
+import static org.springframework.http.HttpMethod.*;
 import static org.springframework.security.config.Customizer.*;
 import static org.springframework.security.config.http.SessionCreationPolicy.*;
 
@@ -45,7 +52,16 @@ public class SecurityConfiguration {
                                 "/swagger-ui",
                                 "/swagger-ui/**",
                                 "/webjars/**"
-                        ).permitAll().anyRequest().authenticated()
+                        ).permitAll()
+                                .requestMatchers("/management/**").hasAnyRole(ADMIN.name(), MANAGER.name())
+
+                                .requestMatchers(GET, "/api/management").hasAnyAuthority(ADMIN_READ.name(), MANAGEMENT_READ.name())
+                                .requestMatchers(POST, "/api/management").hasAnyAuthority(ADMIN_WRITE.name(), MANAGEMENT_WRITE.name())
+                                .requestMatchers(PUT, "/api/management").hasAnyAuthority(ADMIN_UPDATE.name(), MANAGEMENT_UPDATE.name())
+                                .requestMatchers(DELETE, "/api/management").hasAnyAuthority(ADMIN_DELETE.name(), MANAGEMENT_DELETE.name())
+
+                                .anyRequest().authenticated()
+
                         )
                 .sessionManagement(session -> session.sessionCreationPolicy(STATELESS))
                 .authenticationProvider(authenticationProvider())
@@ -64,5 +80,10 @@ public class SecurityConfiguration {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 }

@@ -1,5 +1,6 @@
 package com.dezzy.springsecurity.dto.request;
 
+import com.dezzy.springsecurity.data.entity.Role;
 import jakarta.persistence.Column;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -29,4 +30,5 @@ public class RegistrationRequest {
     @NotBlank
     @Size(min = 8, message = "Password must be a minimum of 8 characters")
     private String password;
+    private Role role;
 }

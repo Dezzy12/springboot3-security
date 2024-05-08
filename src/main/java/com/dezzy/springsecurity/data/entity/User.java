@@ -31,8 +31,8 @@ public class User extends BaseEntity implements UserDetails, Principal {
     private boolean accountLocked;
     private boolean enabled;
 
-    @ManyToMany(fetch = FetchType.EAGER)
-    private List<Role> roles;
+    @Enumerated(EnumType.STRING)
+    private Role role;
 
     @Override
     public String getName() {
@@ -41,10 +41,7 @@ public class User extends BaseEntity implements UserDetails, Principal {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return this.roles
-                .stream()
-                .map(r -> new SimpleGrantedAuthority(r.getName()))
-                .collect(Collectors.toList());
+        return role.getAuthorities();
 
     }
 

@@ -1,23 +1,51 @@
 package com.dezzy.springsecurity.data.entity;
 
 import com.dezzy.springsecurity.data.entity.base.BaseEntity;
+import com.dezzy.springsecurity.data.entity.base.Permissions;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ManyToMany;
 import lombok.*;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.dezzy.springsecurity.data.entity.base.Permissions.*;
 
 @Getter
-@Setter
-@Builder
-@AllArgsConstructor
-@NoArgsConstructor
-@Entity
-public class Role extends BaseEntity {
-    private String name;
+@RequiredArgsConstructor
+public enum Role {
+    USER(Collections.emptySet()),
+    ADMIN(
+            Set.of(
+                    ADMIN_WRITE,
+                    ADMIN_READ,
+                    ADMIN_UPDATE,
+                    ADMIN_DELETE,
+                    MANAGEMENT_WRITE,
+                    MANAGEMENT_READ,
+                    MANAGEMENT_UPDATE,
+                    MANAGEMENT_DELETE
+            )
+    ),
+    MANAGER(
+            Set.of(
+                    MANAGEMENT_WRITE,
+                    MANAGEMENT_READ,
+                    MANAGEMENT_UPDATE,
+                    MANAGEMENT_DELETE
+            )
+    );
 
-    @ManyToMany(mappedBy = "roles")
-    @JsonIgnore
-    private List<User> users;
+    private final Set<Permissions> permissions;
+    public List<SimpleGrantedAuthority> getAuthorities() {
+        var authorities = getPermissions().stream()
+                .map(permission -> new SimpleGrantedAuthority(permission.getPermission()))
+                .collect(Collectors.toList());
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + this.name()));
+        return authorities;
+    }
 }

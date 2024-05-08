@@ -1,39 +1,42 @@
 package com.dezzy.springsecurity.service;
 
+import com.dezzy.springsecurity.data.entity.Role;
 import com.dezzy.springsecurity.data.entity.Token;
 import com.dezzy.springsecurity.data.entity.User;
 import com.dezzy.springsecurity.data.enums.EmailTemplateName;
-import com.dezzy.springsecurity.data.repository.RoleRepository;
 import com.dezzy.springsecurity.data.repository.TokenRepository;
 import com.dezzy.springsecurity.data.repository.UserRepository;
+import com.dezzy.springsecurity.dto.reponse.LoginResponse;
+import com.dezzy.springsecurity.dto.request.LoginRequest;
 import com.dezzy.springsecurity.dto.request.RegistrationRequest;
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
 
-    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final TokenRepository tokenRepository;
     private final EmailService emailService;
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
 
     @Value("${application.mailing.frontend.activation-url")
     private String activationUrl;
 
     public void register(RegistrationRequest request) throws MessagingException {
-        var userRole = roleRepository.findByName("USER")
-                // TODO: better exception handling
-                .orElseThrow(() -> new IllegalStateException("Role with USER was not initialised"));
 
         var user = User.builder()
                 .firstname(request.getFirstname())
@@ -42,10 +45,11 @@ public class AuthenticationService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .accountLocked(false)
                 .enabled(false)
-                .roles(List.of(userRole))
+                .role(request.getRole() != null ? request.getRole() : Role.USER)
                 .build();
         userRepository.save(user);
         sendValidationEmail(user);
+
 
     }
 
@@ -83,5 +87,40 @@ public class AuthenticationService {
             codeBuilder.append(characters.charAt(secureRandom.nextInt(characters.length())));
         }
         return codeBuilder.toString();
+    }
+
+    public LoginResponse login(LoginRequest request){
+        var auth = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.getEmail(),
+                        request.getPassword()
+                )
+        );
+        var claims = new HashMap<String, Object>();
+        var user = ((User)auth.getPrincipal());
+        claims.put("fullName", user.fullName());
+        var jwtToken = jwtService.generateToken(claims, user);
+        return LoginResponse.builder()
+                .token(jwtToken)
+                .build();
+    }
+
+    public void activateAccount(String token) throws MessagingException {
+        Token savedToken = tokenRepository.findByToken(token)
+                //TODO: handle exception properly
+                .orElseThrow(() -> new RuntimeException("Invalid token"));
+
+        if (LocalDateTime.now().isAfter(savedToken.getExpiresAt())){
+            sendValidationEmail(savedToken.getUser());
+            throw new RuntimeException(("Activation token has expired. A new token has been sent."));
+        }
+
+        var user = userRepository.findById(savedToken.getUser().getId())
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        user.setEnabled(true);
+        userRepository.save(user);
+        savedToken.setValidatedAt(LocalDateTime.now());
+        tokenRepository.save(savedToken);
     }
 }
